@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Global Economic Insights</title>
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <script src="https://d3js.org/d3-geo-projection.v2.min.js"></script>
+    <script src="https://d3js.org/topojson.v3.min.js"></script>
+    <style>
+        /* styles for geo heatmap */
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: auto;
+            background-color: #f5f5f5;
+        }
+        .header {
+            text-align: center;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .header h1 {
+            margin-bottom: 20px;
+            font-size: 30px;
+            border-bottom: 4px solid black;
+        }
+        .header p {
+            font-size: 15px;
+        }
+
+        #map-container {
+            margin-top: -120px;
+        }
+
+        svg {
+            display: block;
+            margin: auto;
+            margin-left: 170px;
+        }
+        .tooltip {
+            position: absolute;
+            z-index: 10;
+            visibility: hidden;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+            font-size: 10px;
+            color: #fff;
+            pointer-events: none;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .filter {
+            position: absolute;
+            background: #fff;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            min-width: 200px;
+            min-height: 50px;
+            font-size: 15px;
+        }
+
+        .filter select {
+            font-size: 15px;
+        }
+
+        #yearFilter {
+            top: 250px;
+            right: 120px;
+        }
+
+        #giniIndexFilter {
+            top: 325px;
+            right: 120px;
+        }
+
+        /* styles for time series chart */
+        #dropdown-container {
+            position: absolute;
+            top: 787px;
+            right: 40px;
+            z-index: 1;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            background: #fff;
+            border-radius: 5px;
+            padding: 10px;
+        }
+
+        #chart-container {
+            position: absolute;
+            top: 830px;
+            right: 155px;
+        }
+
+        #legend-container {
+            position: absolute;
+            top: 890px;
+            right: 20px;
+            width: 150px;
+            height: 150px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #fff;
+            font-size: 14px;
+        }
+
+        #legend {
+            padding: 10px;
+        }
+
+        .legend-item {
+            margin-bottom: 5px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            display: inline-block;
+            margin-right: 5px;
+        }
+
+        /* styles for histogram */
+        .histogram-filter {
+            position: absolute;
+            background: #fff;
+            padding: 10px;
+            font-size: 15px;
+            min-width: 200px;
+            min-height: 50px;
+            border-radius: 5px;
+            padding: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .histogram-filter select {
+            font-size: 15px;
+        }
+
+        #histogram-filters {
+            top: 810px; /* Adjust as needed */
+            left: 500px; /* Adjust as needed */
+        }
+
+        #histogram-container {
+            position: absolute;
+            top: 780px; /* Adjust the position as needed */
+            right: 730px; /* Adjust the position as needed */
+        }
+
+        .histogram-svg {
+            width: 470px; /* Adjust width as needed */
+            height: 550px; /* Adjust height as needed */
+        }
+
+        .axis path,
+        .axis line {
+            fill: none;
+            stroke: #000;
+            shape-rendering: crispEdges;
+        }
+
+        .bar {
+            fill: steelblue;
+        }
+
+        .bar:hover {
+            fill: orange;
+        }
+
+        /* Add your CSS styles here */
+        #bubble-chart-container {
+            position: absolute;
+            top: 820px;
+            left: -240px;
+        }
+
+        .bubble {
+            fill: steelblue;
+            opacity: 0.7;
+        }
+
+        .bubble:hover {
+            opacity: 1;
+        }
+
+        .tooltip-bubble {
+            position: absolute;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px;
+            border-radius: 4px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Global Economic Insights: Exploring Inequality through Light-based Metrics</h1>
+        <p>Explore a comprehensive visualization of global inequality metrics, including an interactive map and detailed charts. This dataset, the Global Database of Light-based Geospatial Income Inequality(LGII) Measures, Version 1, contains Gini-Coefficients for 234 countries and territories from 1992 to 2013. 
+            These coefficients, derived from geospatial satellite data on nighttime lights emission and geo-located population counts, reveal economic disparities worldwide. Higher Gini values signify greater inequality. The LGII is meticulously weighted to align with the Standardized World Income Inequality Database(SWIID), creating a powerful composite metric.</p>
+    </div>
+    <div class="filter" id="yearFilter">
+        <label for="year">Year:</label>
+        <select id="year"></select>
+    </div>
+    
+    <div class="filter" id="giniIndexFilter">
+        <label for="giniIndex">Gini Index:</label>
+        <select id="mapGiniIndex"></select>
+    </div>
+
+    <div id="map-container">
+        <svg id="map"></svg>
+    </div>
+
+    <div id="dropdown-container">
+        <select id="chartGiniIndex">
+            <option value="wGini_L000">wGini_L000</option>
+            <option value="wGini_L010">wGini_L010</option>
+            <option value="wGini_L020">wGini_L020</option>
+            <option value="wGini_L030">wGini_L030</option>
+            <option value="wGini_L040">wGini_L040</option>
+            <option value="wGini_L050" selected>wGini_L050</option>
+            <option value="wGini_L060">wGini_L060</option>
+            <option value="wGini_L070">wGini_L070</option>
+            <option value="wGini_L080">wGini_L080</option>
+            <option value="wGini_L090">wGini_L090</option>
+            <option value="wGini_L100">wGini_L100</option>
+        </select>
+        <select id="country-dropdown" multiple></select>
+        <button id="clear-button">Clear</button>
+    </div>
+    <div id="chart-container">
+        <svg id="chart"></svg>
+    </div>
+    <div id="legend-container">
+        <div id="legend"></div>
+    </div>
+
+    <div id="histogram-filters" class="histogram-filter">
+        <label for="histogram-year">Histogram Year:</label>
+        <select id="histogram-year"></select>
+
+        <label for="histogram-giniIndex">Histogram Gini Index:</label>
+        <select id="histogram-giniIndex"></select>
+    </div>
+
+    <!-- Add histogram container -->
+    <div id="histogram-container">
+        <svg class="histogram"></svg>
+    </div>
+
+    <div id="bubble-chart-container">
+        <svg id="bubble-chart"></svg>
+    </div>
+
+    <div class="tooltip-bubble" id="tooltip-bubble"></div>
+
+    <script>
+        // Load the data
+        d3.csv("DataLGI.csv").then(function(data) {
+            // Call the ready function with the loaded data
+            ready(data);
+        });
+
+        // Move the Promise.all block inside the ready function
+        function ready(data) {
+            Promise.all([
+                d3.json("world.geojson")
+            ]).then(function([world]) {
+                // Pass both world and data to the inner function
+                innerFunction(world, data);
+            });
+        }
+
+        // Define the inner function to handle data processing
+        function innerFunction(world, data) {
+            var width = 1000, height = 750;
+
+            var svg = d3.select("body").append("svg")
+                .attr("width", width)
+                .attr("height", height);
+
+            // Tooltip
+            var tooltip = d3.select("body").append("div")
+                .attr("class", "tooltip")
+                .style("position", "absolute")
+                .style("z-index", "10")
+                .style("visibility", "hidden");
+
+            var projection = d3.geoMercator()
+                .scale(125)
+                .translate([width / 2, height / 2]);
+
+            var path = d3.geoPath()
+                .projection(projection);
+
+            var color = d3.scaleSequential(d3.interpolateOranges);
+
+            var dataById = {};
+
+            data.forEach(function(d) {
+                dataById[d.ISO] = +d.wGini_L050;
+            });
+
+            color.domain(d3.extent(data, function(d) { return +d.wGini_L050; }));
+
+            svg.append("g")
+            .attr("class", "countries")
+            .selectAll("path")
+            .data(world.features)
+            .enter().append("path")
+            .attr("d", path)
+            .style("fill", function(d) { return color(dataById[d.properties.ISO_A3]); })
+            .on("mouseover", function(d) {
+                var dataRow = data.find(function(row) { return row.ISO === d.properties.ISO_A3; });
+                if (dataRow) {
+                    d3.select(this).style("fill", "red");
+                    tooltip.style("visibility", "visible")
+                           .html(
+                               "<strong>Country:</strong> " + dataRow.Name + "<br>" +
+                               "<strong>ISO:</strong> " + dataRow.ISO + "<br>" +
+                               "<strong>Gini Index:</strong> " + dataById[d.properties.ISO_A3]
+                           );
+                }
+            })
+            .on("mousemove", function() {
+                tooltip.style("left", (d3.event.pageX + 10) + "px")
+                       .style("top", (d3.event.pageY + 10) + "px");
+            })
+            
+            .on("mouseout", function(d) {
+                d3.select(this).style("fill", function(d) { return color(dataById[d.properties.ISO_A3]); });
+                tooltip.style("visibility", "hidden");
+            });
+            
+            var years = d3.range(1992, 2014);  // Update with the range of years in your data
+            var yearSelect = d3.select("#year");
+            yearSelect.selectAll("option")
+                .data(years)
+                .enter().append("option")
+                .attr("value", function(d) { return d; })
+                .text(function(d) { return d; });
+        
+            var giniIndices = ["wGini_L000", "wGini_L010", "wGini_L020", "wGini_L030", "wGini_L040", "wGini_L050", "wGini_L060", "wGini_L070", "wGini_L080", "wGini_L090", "wGini_L100"];
+            var mapGiniIndexSelect = d3.select("#mapGiniIndex");
+            mapGiniIndexSelect.selectAll("option")
+                .data(giniIndices)
+                .enter().append("option")
+                .attr("value", function(d) { return d; })
+                .text(function(d) { return d; });
+    
+            yearSelect.on("change", function() {
+                redrawMap();
+            });
+    
+            mapGiniIndexSelect.on("change", function() {
+                redrawMap();
+            });
+    
+            function redrawMap() {
+                var selectedYear = yearSelect.node().value;
+                var selectedGiniIndex = mapGiniIndexSelect.node().value;
+    
+                var filteredData = data.filter(function(d) { return d.Year === selectedYear; });
+    
+                filteredData.forEach(function(d) {
+                    dataById[d.ISO] = +d[selectedGiniIndex];
+                });
+    
+                color.domain(d3.extent(filteredData, function(d) { return +d[selectedGiniIndex]; }));
+    
+                svg.selectAll("path")
+                    .style("fill", function(d) { return color(dataById[d.properties.ISO_A3]); });
+            }
+
+            // Create dropdowns
+            var chartGiniIndexSelect = d3.select("#chartGiniIndex");
+            var countryDropdown = d3.select("#country-dropdown");
+
+            // Define color scale
+            var colorScale = d3.scaleOrdinal(d3.schemeCategory10);
+
+            // Populate country dropdown
+            var countryNames = [...new Set(data.map(d => d.Name))];
+            countryNames.forEach(function(name) {
+                countryDropdown.append("option")
+                    .attr("value", name)
+                    .text(name);
+            });
+
+            // Select 5 popular countries on initial loading
+            var popularCountries = ["India", "China", "United States of America", "United Kingdom of Great Britain and Northern Ireland", "Russian Federation"];
+            countryDropdown.selectAll("option")
+                .property("selected", function(d) { return popularCountries.includes(d); });
+
+            // Initial chart
+            updateChart(chartGiniIndexSelect.property("value"), popularCountries);
+
+            // Update chart when dropdown selection changes
+            chartGiniIndexSelect.on("change", function() {
+                var selectedGini = d3.select(this).property("value");
+                var selectedCountries = getSelectedCountries();
+                updateChart(selectedGini, selectedCountries);
+            });
+
+            // Update chart when country selection changes
+            countryDropdown.on("change", function() {
+                var selectedGini = chartGiniIndexSelect.property("value");
+                var selectedCountries = getSelectedCountries();
+                updateChart(selectedGini, selectedCountries);
+            });
+
+            // Function to get selected countries from dropdown
+            function getSelectedCountries() {
+                return Array.from(countryDropdown.node().selectedOptions).map(option => option.value);
+            }
+
+            // Function to update chart
+            function updateChart(selectedGini, selectedCountries) {
+                // Clear previous chart and legend
+                d3.select("#chart").html("");
+                d3.select("#legend").html("");
+
+                // Filter data based on selected Gini index and countries
+                var filteredData = data.filter(function(d) {
+                    return selectedCountries.includes(d.Name);
+                });
+
+                // Group data by country name
+                var nestedData = d3.nest()
+                    .key(function(d) { return d.Name; })
+                    .entries(filteredData);
+
+                // Create scales
+                var margin = {top: 100, right: 20, bottom: 80, left: 80}; // Increased bottom and left margin for axis labels
+                var width = 440 - margin.left - margin.right;
+                var height = 440 - margin.top - margin.bottom;
+
+                var xScale = d3.scaleLinear().domain(d3.extent(filteredData, function(d) { return +d.Year; })).range([0, width]);
+                var yScale = d3.scaleLinear().domain([0, d3.max(filteredData, function(d) { return +d[selectedGini]; })]).range([height, 0]);
+
+                // Create line generator
+                var line = d3.line()
+                    .x(function(d) { return xScale(+d.Year); })
+                    .y(function(d) { return yScale(+d[selectedGini]); });
+
+                // Create SVG
+                var svg = d3.select("#chart")
+                            .attr("width", width + margin.left + margin.right)
+                            .attr("height", height + margin.top + margin.bottom)
+                            .append("g")
+                            .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+                // Add x axis
+                svg.append("g")
+                    .attr("transform", "translate(0," + height + ")")
+                    .call(d3.axisBottom(xScale))
+                    .append("text")
+                    .attr("x", width / 2)
+                    .attr("y", margin.bottom / 2)
+                    .attr("fill", "#000")
+                    .attr("text-anchor", "middle")
+                    .text("Year");
+
+                // Add y axis
+                svg.append("g")
+                    .call(d3.axisLeft(yScale))
+                    .append("text")
+                    .attr("transform", "rotate(-90)")
+                    .attr("x", -height / 2)
+                    .attr("y", -margin.left / 2)
+                    .attr("fill", "#000")
+                    .attr("text-anchor", "middle")
+                    .text("Gini Index");
+
+                // Add lines to SVG
+                svg.selectAll(".line")
+                    .data(nestedData)
+                    .enter().append("path")
+                    .attr("class", "line")
+                    .attr("fill", "none")
+                    .attr("stroke", function(d) { return colorScale(d.key); })
+                    .attr("stroke-width", 1.5)
+                    .attr("d", function(d) { return line(d.values); });
+
+                // Create legend
+                var legend = d3.select("#legend");
+                nestedData.forEach(function(d) {
+                    var legendItem = legend.append("div").attr("class", "legend-item");
+                    legendItem.append("div")
+                        .attr("class", "legend-color")
+                        .style("background-color", colorScale(d.key));
+                    legendItem.append("span").text(d.key);
+                });
+            }
+
+            // Add event listener for clear button
+            d3.select("#clear-button").on("click", function() {
+                // Clear country selection
+                countryDropdown.selectAll("option").property("selected", false);
+                // Update chart without any countries
+                var selectedGini = chartGiniIndexSelect.property("value");
+                updateChart(selectedGini, []);
+            });
+        }
+                // Set up SVG canvas
+                const histogramSvg = d3.select("#histogram-container")
+                .append("svg")
+                .attr("width", "100%")
+                .attr("height", "100%")
+                .attr("viewBox", "0 0 580 380")
+                .append("g")
+                .attr("transform", "translate(50, 20)");
+
+        // Define scales and axes
+        const xScale = d3.scaleLinear()
+        .domain([0, 1])
+        .range([0, 500]);
+
+        const yScale = d3.scaleLinear()
+        .range([300, 0]);
+
+        const xAxis = d3.axisBottom(xScale).ticks(10).tickFormat(d3.format(".2f"));
+        const yAxis = d3.axisLeft(yScale).ticks(5);
+
+        // Append axes to SVG
+        histogramSvg.append("g")
+        .attr("class", "x-axis")
+        .attr("transform", "translate(0, 300)")
+        .call(xAxis);
+
+        histogramSvg.append("g")
+        .attr("class", "y-axis")
+        .call(yAxis);
+
+        // Load data from CSV file
+        d3.csv("DataLGI.csv").then(function(data) {
+        // Define initial values
+        let histogramYear = "1992";
+        let selectedHistogramGiniIndex = "wGini_L050";
+
+        // Function to update histogram
+        function updateHistogram() {
+        // Filter data for the selected year
+        const filteredData = data.filter(d => d.Year === histogramYear);
+
+        // Extract Gini coefficient values based on the selected index
+        const giniValues = filteredData.map(d => parseFloat(d[selectedHistogramGiniIndex]));
+
+        // Define histogram function
+        const histogram = d3.histogram()
+                    .value(d => d)
+                    .domain([0, 1])
+                    .thresholds(d3.range(0, 1.1, 0.05)); // Adjusted to use intervals of 0.05
+
+        // Bin the data
+        const bins = histogram(giniValues);
+
+        // Update y scale domain based on the new data
+        yScale.domain([0, d3.max(bins, d => d.length)]);
+
+        // Update bars
+        const bars = histogramSvg.selectAll(".bar")
+        .data(bins);
+
+        bars.exit().remove(); // Remove old bars
+
+        bars.enter()
+        .append("rect")
+        .attr("class", "bar")
+        .merge(bars)
+        .transition()
+        .attr("x", d => xScale(d.x0))
+        .attr("width", d => Math.max(0, xScale(d.x1) - xScale(d.x0) - 1))
+        .attr("y", d => yScale(d.length))
+        .attr("height", d => yScale(0) - yScale(d.length));
+
+        // Update x axis
+        histogramSvg.select(".x-axis")
+        .transition()
+        .call(xAxis);
+
+        // Update y axis
+        histogramSvg.select(".y-axis")
+        .transition()
+        .call(yAxis);
+        }
+
+        // Initial update
+        updateHistogram();
+
+            // Add X axis label
+            histogramSvg.append("text")
+            .attr("x", 250) // Adjust x position as needed
+            .attr("y", 340) // Adjust y position as needed
+            .style("text-anchor", "middle")
+            .text("Gini Coefficient");
+        
+            // Add Y axis label
+            histogramSvg.append("text")
+            .attr("transform", "rotate(-90)")
+            .attr("x", -150) // Adjust x position as needed
+            .attr("y", -30) // Adjust y position as needed
+            .style("text-anchor", "middle")
+            .text("Frequency");
+
+        // Populate histogram year filter
+        const histogramYears = d3.range(1992, 2014); // Update with the range of years in your data
+        const histogramYearSelect = d3.select("#histogram-year");
+        histogramYearSelect.selectAll("option")
+        .data(histogramYears)
+        .enter().append("option")
+        .attr("value", d => d)
+        .text(d => d);
+
+        // Populate histogram Gini index filter
+        const histogramGiniIndices = ["wGini_L000", "wGini_L010", "wGini_L020", "wGini_L030", "wGini_L040", "wGini_L050", "wGini_L060", "wGini_L070", "wGini_L080", "wGini_L090", "wGini_L100"];
+        const histogramGiniIndexSelect = d3.select("#histogram-giniIndex");
+        histogramGiniIndexSelect.selectAll("option")
+        .data(histogramGiniIndices)
+        .enter().append("option")
+        .attr("value", d => d)
+        .text(d => d);
+
+        // Add event listener for histogram year filter
+        histogramYearSelect.on("change", function() {
+        histogramYear = this.value;
+        updateHistogram();
+        });
+
+        // Add event listener for histogram Gini index filter
+        histogramGiniIndexSelect.on("change", function() {
+        selectedHistogramGiniIndex = this.value;
+        updateHistogram();
+        });
+        });
+        // Set up SVG dimensions
+        const width = 470;
+        const height = 370;
+
+        const svg = d3.select("#bubble-chart")
+            .attr("width", width)
+            .attr("height", height)
+            .attr("transform", "translate(90, 50)"); // Adjust the translate values as needed
+
+        // Add tooltip
+        const tooltip = d3.select("#tooltip-bubble");
+
+        // Load data from CSV file
+        d3.csv("DataLGI.csv").then(function(data) {
+            // Convert string values to numbers
+            data.forEach(function(d) {
+                d.Pdens = +d.Pdens;
+                d.wGini_L050 = +d.wGini_L050;
+            });
+
+            // Set up scales
+            const xScale = d3.scaleLinear()
+                .domain([0, d3.max(data, d => d.Pdens)])
+                .range([50, width - 50]);
+
+            const yScale = d3.scaleLinear()
+                .domain([0, d3.max(data, d => d.wGini_L050)])
+                .range([height - 50, 50]);
+
+            const rScale = d3.scaleSqrt()
+                .domain([0, d3.max(data, d => d.Pdens)])
+                .range([2, 20]); // Adjust size range as needed
+
+            // Add bubbles
+            svg.selectAll("circle")
+                .data(data)
+                .enter()
+                .append("circle")
+                .attr("cx", d => xScale(d.Pdens))
+                .attr("cy", d => yScale(d.wGini_L050))
+                .attr("r", d => rScale(d.Pdens))
+                .attr("class", "bubble")
+                .on("mouseover", function(d) {
+                    // Show tooltip with country name and values
+                    tooltip.style("visibility", "visible")
+                        .html(`<strong>Country:</strong> ${d.Name}<br>
+                               <strong>Population Density:</strong> ${d.Pdens}<br>
+                               <strong>Gini Coefficient:</strong> ${d.wGini_L050}`)
+                        .style("left", (d3.pointer(event)[0] + 10) + "px") // Use d3.pointer to get the current mouse position
+                        .style("top", (d3.pointer(event)[1] - 15) + "px");
+                })
+
+                .on("mouseout", () => {
+                    tooltip.style("opacity", 0);
+                });
+
+            // Add X axis
+            svg.append("g")
+                .attr("transform", `translate(0, ${height - 50})`)
+                .call(d3.axisBottom(xScale));
+
+            // Add Y axis
+            svg.append("g")
+                .attr("transform", "translate(50, 0)")
+                .call(d3.axisLeft(yScale));
+
+            // Add X axis label
+            svg.append("text")
+                .attr("x", width / 2)
+                .attr("y", height - 10)
+                .style("text-anchor", "middle")
+                .text("Population Density");
+
+            // Add Y axis label
+            svg.append("text")
+                .attr("transform", "rotate(-90)")
+                .attr("x", -height / 2)
+                .attr("y", 20)
+                .style("text-anchor", "middle")
+                .text("Gini Coefficient");
+        });
+    </script>
+</body>
+</html>
